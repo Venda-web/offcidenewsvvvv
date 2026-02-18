@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>СпортНовости</title>
+    <meta charset="utf-8">
+    <style>
+        body { margin: 0; font-family: Arial; background: #f0f0f0; }
+        .header { background: #1a2a3a; color: white; font-size: 24px; padding: 15px; text-align: center; }
+        .container { max-width: 900px; margin: 10px auto; padding: 10px; }
+        .column { background: white; padding: 15px; margin: 10px 0; border-radius: 10px; }
+        .football h2 { color: #27ae60; }
+        .hockey h2 { color: #e67e22; }
+        .news { border-bottom: 1px solid #ddd; padding: 8px 0; }
+        .news:last-child { border: 0; }
+        .date { color: gray; font-size: 12px; }
+        .admin-btn { position: fixed; top: 10px; right: 10px; background: #1a2a3a; color: white; border: 0; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
+        .admin-panel { background: #fff3cd; padding: 20px; border-radius: 10px; margin: 10px 0; }
+        input, textarea { width: 100%; margin: 5px 0; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #1a2a3a; color: white; border: 0; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+        .login-box { background: white; padding: 20px; border-radius: 10px; max-width: 300px; margin: 20px auto; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="header">⚽ СПОРТНОВОСТИ 🏒</div>
+
+<button class="admin-btn" onclick="showLogin()">🔑 Админка</button>
+
+<div class="container">
+    <!-- Вход для админа -->
+    <div id="loginModal" class="hidden">
+        <div class="login-box">
+            <h3>🔐 Вход</h3>
+            <input type="password" id="passwordInput" placeholder="Пароль">
+            <button onclick="checkPassword()">Войти</button>
+            <button onclick="hideLogin()">Отмена</button>
+            <div id="loginError" style="color:red;"></div>
+        </div>
+    </div>
+
+    <!-- Панель админа -->
+    <div id="adminPanel" class="admin-panel hidden">
+        <h3>⚙️ Панель управления</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <h4>⚽ Футбол</h4>
+                <input id="fDate" placeholder="Дата" value="18.02.2026">
+                <input id="fTitle" placeholder="Заголовок">
+                <textarea id="fText" placeholder="Текст"></textarea>
+                <button onclick="addNews('football')">➕ Добавить</button>
+            </div>
+            <div>
+                <h4>🏒 Хоккей</h4>
+                <input id="hDate" placeholder="Дата" value="18.02.2026">
+                <input id="hTitle" placeholder="Заголовок">
+                <textarea id="hText" placeholder="Текст"></textarea>
+                <button onclick="addNews('hockey')">➕ Добавить</button>
+            </div>
+        </div>
+        <button onclick="logout()" style="background: #dc3545;">Выйти</button>
+    </div>
+
+    <!-- Новости -->
+    <div class="column football">
+        <h2>⚽ ФУТБОЛ</h2>
+        <div id="footballNews">Загрузка...</div>
+    </div>
+    
+    <div class="column hockey">
+        <h2>🏒 ХОККЕЙ</h2>
+        <div id="hockeyNews">Загрузка...</div>
+    </div>
+</div>
+
+<script>
+// ======== НАСТРОЙКИ ========
+const SECRET_PASSWORD = "sport123";
+const SHEET_ID = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJ4YwTscKacmVUgHmXUcQtizBM_I-WJJc-BlbQiVLYyXIDVquXaZv39P0HQCGHV0MLugsy2K8FtCwD/pub?output=csv"; // ВСТАВЬ СВОЙ ID
+
+let isAdmin = false;
+
+// Загружаем новости при открытии страницы
+window.onload = function() {
+    loadNews();
+};
+
+// Загрузка из Google Sheets
+async function loadNews() {
+    try {
+        // Пробуем загрузить из кеша
+        let news = JSON.parse(localStorage.getItem('cachedNews') || '[]');
+        if(news.length > 0) {
+            showNews(news);
+        }
+        
+        // Загружаем свежие
+        const url = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/pub?output=csv`;
+        const response = await fetch(url);
+        const csv = await response.text();
+        
+        // Парсим CSV
+        const rows = csv.split('\n').map(row => row.split(','));
+        const newsList = [];
+        
+        for(let i = 1; i < rows.length; i++) { // Пропускаем заголовок
+            if(rows[i].length >= 4) {
+                newsList.push({
+                    date: rows[i][0].replace(/"/g, ''),
+                    sport: rows[i][1].replace(/"/g, ''),
+                    title: rows[i][2].replace(/"/g, ''),
+                    text: rows[i][3].replace(/"/g, '')
+                });
+            }
+        }
+        
+        // Сохраняем в кеш
+        localStorage.setItem('cachedNews', JSON.stringify(newsList));
+        showNews(newsList);
+        
+    } catch(e) {
+        console.log('Ошибка загрузки:', e);
+    }
+}
+
+// Показать новости
+function showNews(newsList) {
+    let footballHtml = '', hockeyHtml = '';
+    
+    newsList.forEach(item => {
+        const newsItem = `<div class="news">
+            <span class="date">${item.date}</span>
+            <b>${item.title}</b><br>${item.text}
+        </div>`;
+        
+        if(item.sport === 'Футбол') {
+            footballHtml += newsItem;
+        } else {
+            hockeyHtml += newsItem;
+        }
+    });
+    
+    document.getElementById('footballNews').innerHTML = footballHtml || '<p>Нет новостей</p>';
+    document.getElementById('hockeyNews').innerHTML = hockeyHtml || '<p>Нет новостей</p>';
+}
+
+// Добавление новости (через форму Google)
+async function addNews(sport) {
+    if(!isAdmin) return;
+    
+    const date = document.getElementById(sport === 'football' ? 'fDate' : 'hDate').value;
+    const title = document.getElementById(sport === 'football' ? 'fTitle' : 'hTitle').value;
+    const text = document.getElementById(sport === 'football' ? 'fText' : 'hText').value;
+    const sportName = sport === 'football' ? 'Футбол' : 'Хоккей';
+    
+    if(!title || !text) {
+        alert('Заполни заголовок и текст!');
+        return;
+    }
+    
+    // Здесь должна быть отправка в Google Sheets
+    // Но для простоты пока добавим в кеш
+    alert('В демо-режиме новость не сохранится. Нужно настроить Google Forms');
+    
+    // Очищаем поля
+    if(sport === 'football') {
+        document.getElementById('fTitle').value = '';
+        document.getElementById('fText').value = '';
+    } else {
+        document.getElementById('hTitle').value = '';
+        document.getElementById('hText').value = '';
+    }
+}
+
+// Вход в админку
+function showLogin() {
+    document.getElementById('loginModal').classList.remove('hidden');
+}
+
+function hideLogin() {
+    document.getElementById('loginModal').classList.add('hidden');
+    document.getElementById('passwordInput').value = '';
+    document.getElementById('loginError').innerHTML = '';
+}
+
+function checkPassword() {
+    const pwd = document.getElementById('passwordInput').value;
+    if(pwd === SECRET_PASSWORD) {
+        isAdmin = true;
+        document.getElementById('adminPanel').classList.remove('hidden');
+        hideLogin();
+    } else {
+        document.getElementById('loginError').innerHTML = 'Неверный пароль!';
+    }
+}
+
+function logout() {
+    isAdmin = false;
+    document.getElementById('adminPanel').classList.add('hidden');
+}
+</script>
+
+</body>
+</html>
